@@ -1,0 +1,20 @@
+# Example: run Wensenlijst behind a reverse proxy on the same host.
+services:
+  wensenlijst:
+    build: .
+    container_name: wensenlijst
+    environment:
+      - ORIGIN=https://wishlist.example.com   # your public URL
+      - TZ=Europe/Amsterdam
+      # Optional e-mail (password reset). Can also be configured on /admin.
+      # - SMTP_HOST=smtp.example.com
+      # - SMTP_PORT=587
+      # - SMTP_SECURE=starttls
+      # - SMTP_USER=wensenlijst@example.com
+      # - SMTP_PASS=change-me
+      # - SMTP_FROM=wensenlijst@example.com
+    volumes:
+      - ./data:/data
+    ports:
+      - 127.0.0.1:3280:3000   # only reachable through the reverse proxy
+    restart: unless-stopped

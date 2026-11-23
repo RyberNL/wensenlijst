@@ -1,0 +1,9 @@
+# local server notes (domain, paths, mail setup): not for the repo
+NOTES.local.md
+# runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+.env
+node_modules/
