@@ -85,7 +85,7 @@
       h('div', { class: 'row' },
         h('a', { class: 'btn', href: `/l/${l.id}`, target: '_blank', rel: 'noopener' }, 'Deellink'),
         h('button', { onclick: () => copy(`${o}/l/${l.id}`) }, 'Kopieer deellink'),
-        h('a', { class: 'btn', href: `/beheer/${l.edit}`, target: '_blank', rel: 'noopener' }, 'Beheerlink'),
+        h('a', { class: 'btn', href: `/beheer/${l.edit}?via=admin`, target: '_blank', rel: 'noopener' }, 'Beheerlink'),
         h('button', { onclick: () => copy(`${o}/beheer/${l.edit}`) }, 'Kopieer beheerlink'),
         h('button', { class: 'danger', onclick: async () => {
           if (!confirm(t('Lijst "{0}" definitief verwijderen?', l.title))) return;
@@ -101,7 +101,7 @@
       h('div', { class: 'row' },
         h('a', { class: 'btn', href: `/g/${g.id}`, target: '_blank', rel: 'noopener' }, 'Groeplink'),
         h('button', { onclick: () => copy(`${o}/g/${g.id}`) }, 'Kopieer groeplink'),
-        h('a', { class: 'btn', href: `/groep/${g.edit}`, target: '_blank', rel: 'noopener' }, 'Beheerlink'),
+        h('a', { class: 'btn', href: `/groep/${g.edit}?via=admin`, target: '_blank', rel: 'noopener' }, 'Beheerlink'),
         h('button', { onclick: () => copy(`${o}/groep/${g.edit}`) }, 'Kopieer beheerlink'),
         h('button', { class: 'danger', onclick: async () => {
           if (!confirm(t('Groep "{0}" verwijderen? De lijsten zelf blijven bestaan.', g.title))) return;

@@ -190,9 +190,9 @@ ul.items { list-style: none; margin: 0; padding: 0; display: flex; flex-directio
 .item.claimed .thumb { opacity: .45; filter: grayscale(1); }
 .preview:empty { display: none; }
 @media (max-width: 560px) {
-  .item { grid-template-columns: 68px 1fr; }
+  .item:not(.grouprow) { grid-template-columns: 68px 1fr; }
   .thumb { width: 68px; height: 68px; }
-  .actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .item:not(.grouprow) .actions { grid-column: 1 / -1; justify-content: flex-end; }
   .status { text-align: left; }
   .actions.claim > button { width: 100%; }
 }
@@ -274,8 +274,19 @@ fieldset.details { border: 0; margin: 0; padding: 0; min-width: 0; transition: o
 .pairlogin[open] > summary { margin-bottom: 12px; }
 
 /* ---------- groups ---------- */
-.grouprow { grid-template-columns: 52px 1fr auto; }
-.grouprow .thumb { width: 52px; height: 52px; font-size: 1.5rem; }
+/* compact member rows: one line, also on phones */
+.item.grouprow { grid-template-columns: 40px 1fr auto; gap: 12px; padding: 10px 12px; }
+.grouprow .thumb { width: 40px; height: 40px; font-size: 1.25rem; border-radius: 12px; }
+.grouprow .body { gap: 0; }
+.grouprow .body .small { font-size: .8rem; }
+.row-tools { display: flex; gap: 6px; }
+.row-btn { width: 36px; height: 36px; padding: 0; border-radius: 11px; display: grid; place-items: center; color: var(--text); text-decoration: none; border: 1px solid var(--line); background: var(--card); transition: transform .2s var(--ease-spring), color .2s, background-color .2s, border-color .2s; }
+.row-btn:hover { transform: scale(1.08); border-color: var(--accent); }
+.row-btn svg { width: 18px; height: 18px; }
+.row-btn:hover { color: var(--accent); }
+.row-btn.danger { color: var(--muted); }
+.row-btn.danger:hover { color: #fff; background: var(--bad); border-color: var(--bad); }
+.grouprow:hover .thumb { transform: scale(1.08) rotate(-4deg); }
 .grouprow a.title { font-weight: 650; color: var(--text); text-decoration: none; }
 .grouprow a.title:hover { color: var(--accent); }
 .badge { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; background: var(--grad); color: var(--on-accent); font-size: .72rem; font-weight: 700; letter-spacing: .02em; vertical-align: 1px; }

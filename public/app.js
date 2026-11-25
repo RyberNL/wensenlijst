@@ -131,9 +131,16 @@
   }
   const ICON_EDIT = ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z'];
   const ICON_UNLINK = ['M18 6 6 18', 'M6 6l12 12'];
+  const ICON_EYE = ['M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6'];
+  // Compact icon actions for group member rows: view (eye) and, where allowed, remove (cross).
+  function rowTools(viewHref, name, onRemove, removeLabel) {
+    return h('div', { class: 'row-tools' },
+      h('a', { class: 'row-btn', href: viewHref, title: 'Bekijk', 'aria-label': t('Lijst "{0}" bekijken', name) }, icon(ICON_EYE)),
+      onRemove ? h('button', { type: 'button', class: 'row-btn danger', title: removeLabel, 'aria-label': `${t(removeLabel)}: ${name}`, onclick: onRemove }, icon(ICON_UNLINK)) : null);
+  }
   // Square tiles for "my lists / my groups": the tile opens the list or group, the pencil opens its beheer page.
   const hueOf = (s) => { let x = 0; for (const c of String(s)) x = (x * 31 + c.charCodeAt(0)) >>> 0; return [18, 32, 345, 330, 8, 45][x % 6]; };
-  function tiles(entries, kind, { onUnlink, addTile } = {}) {
+  function tiles(entries, kind, { onUnlink, onForget, addTile } = {}) {
     const isList = kind === 'list';
     return h('div', { class: 'tiles' },
       entries.map((x) => {
@@ -145,12 +152,23 @@
             h('span', { class: 'tile-kind' }, isList ? 'Lijst' : 'Groep')),
           h('div', { class: 'tile-tools' },
             h('a', { class: 'tile-btn', href: isList ? `/beheer/${x.edit}` : `/groep/${x.edit}`, title: 'Bewerken', 'aria-label': t('{0} bewerken', name) }, icon(ICON_EDIT)),
-            onUnlink ? h('button', { type: 'button', class: 'tile-btn', title: 'Uit account halen', 'aria-label': t('{0} uit je account halen', name), onclick: () => onUnlink(x) }, icon(ICON_UNLINK)) : null));
+            onUnlink ? h('button', { type: 'button', class: 'tile-btn', title: 'Uit account halen', 'aria-label': t('{0} uit je account halen', name), onclick: () => onUnlink(x) }, icon(ICON_UNLINK)) : null,
+            onForget && !x.acct ? h('button', { type: 'button', class: 'tile-btn', title: 'Van dit apparaat verwijderen', 'aria-label': t('{0} van dit apparaat verwijderen', name), onclick: () => onForget(x) }, icon(ICON_UNLINK)) : null));
         tile.style.setProperty('--hue', hueOf(x.id));
         return tile;
       }),
       addTile ? h('a', { class: 'tile tile-add', href: addTile.href }, h('span', { class: 'tile-plus', 'aria-hidden': 'true' }, '+'), h('span', { class: 'tile-title' }, t(addTile.label))) : null);
   }
+  // Forget a list/group on this device only (the list/group itself is untouched; its edit link still works).
+  function forgetLocal(kind, x) {
+    if (kind === 'list') store.set('ownLists', ownLists().filter((e) => e.edit !== x.edit));
+    else { store.set('ownGroups', ownGroups().filter((e) => e.edit !== x.edit)); setGroupKey(x.id, ''); }
+  }
+  const askForget = (kind, x, after) => {
+    const name = x.title || (kind === 'list' ? t('Naamloze lijst') : t('Naamloze groep'));
+    if (!confirm(t('"{0}" van dit apparaat verwijderen? De lijst of groep zelf blijft bestaan; met de beheerlink kun je er later weer bij.', name))) return;
+    forgetLocal(kind, x); toast(t('Van dit apparaat verwijderd')); after();
+  };
   function thumb(item) {
     if (!item.image) return h('div', { class: 'thumb empty', 'aria-hidden': 'true' }, '🎁');
     const img = h('img', { class: 'thumb', src: item.image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
@@ -303,13 +321,21 @@
 
     const importCard = listsHere.length + groupsHere.length ? h('section', { class: 'card stack notice' },
       h('p', {}, listsHere.length + groupsHere.length === 1 ? t('Op dit apparaat staat 1 lijst of groep die nog niet aan je account gekoppeld is:') : t('Op dit apparaat staan {0} lijsten of groepen die nog niet aan je account gekoppeld zijn:', listsHere.length + groupsHere.length)),
-      h('ul', { class: 'plain' }, [...listsHere, ...groupsHere].map((x) => h('li', {}, x.title || 'Naamloos'))),
+      h('div', {}, [...listsHere.map((x) => ['list', x]), ...groupsHere.map((x) => ['group', x])].map(([kind, x]) => h('div', { class: 'acctrow' },
+        h('a', { href: kind === 'list' ? `/beheer/${x.edit}` : `/groep/${x.edit}`, translate: 'no' }, (kind === 'list' ? '🎁 ' : '👨‍👩‍👧‍👦 ') + (x.title || t('Naamloos'))),
+        h('button', { class: 'link small', onclick: () => askForget(kind, x, renderAccount) }, 'van dit apparaat verwijderen')))),
       h('div', {}, h('button', { class: 'primary', onclick: async () => {
         try {
           const r = await api('POST', '/api/account/claim', { lists: listsHere.map((x) => x.edit), groups: groupsHere.map((x) => x.edit) });
           applyMe(r); toast(t('{0} gekoppeld', r.claimed)); renderAccount();
         } catch (e) { toast(e.message, true); }
-      } }, 'Aan mijn account koppelen')),
+      } }, 'Aan mijn account koppelen'), ' ',
+        listsHere.length + groupsHere.length < 2 ? null : h('button', { onclick: () => {
+          if (!confirm(t('Alle {0} lijsten en groepen die niet aan je account gekoppeld zijn van dit apparaat verwijderen? Ze blijven zelf bestaan.', listsHere.length + groupsHere.length))) return;
+          for (const x of listsHere) forgetLocal('list', x);
+          for (const x of groupsHere) forgetLocal('group', x);
+          toast(t('Van dit apparaat verwijderd')); renderAccount();
+        } }, 'Alles van dit apparaat verwijderen')),
       h('p', { class: 'muted small' }, 'Lijsten die al aan een ander account hangen worden overgeslagen.'),
     ) : null;
 
@@ -489,12 +515,12 @@
       form,
       own.length ? h('section', { class: 'card stack' },
         h('h2', {}, 'Mijn lijsten op dit apparaat'),
-        tiles(own, 'list'),
+        tiles(own, 'list', { onForget: (x) => askForget('list', x, renderHome) }),
         me.user ? h('p', { class: 'muted small' }, 'Lijsten in je account staan op al je apparaten. ', h('a', { href: '/account' }, 'Account beheren')) : h('p', { class: 'muted small' }, 'Deze lijst wordt alleen in deze browser bewaard. Bewaar je beheerlinks ook ergens anders, of ', h('a', { href: '/account' }, 'maak een account'), '.'),
       ) : null,
       groups.length ? h('section', { class: 'card stack' },
         h('h2', {}, 'Mijn groepen op dit apparaat'),
-        tiles(groups, 'group'),
+        tiles(groups, 'group', { onForget: (x) => askForget('group', x, renderHome) }),
       ) : null,
       h('details', { class: 'card settings' }, h('summary', {}, 'Groep maken'), gform),
       h('p', { class: 'center small' }, h('a', { href: '/faq' }, 'Vragen? Bekijk de veelgestelde vragen')),
@@ -507,7 +533,8 @@
     try { data = await api('GET', `/api/edit/${encodeURIComponent(tokenStr)}`); }
     catch (e) { return renderError(e.message); }
     const { list, items, groups = [] } = data;
-    rememberOwn({ id: list.id, edit: tokenStr, title: list.title });
+    const viaAdmin = new URLSearchParams(location.search).get('via') === 'admin'; // opened from /admin: don't keep it on this device
+    if (!viaAdmin) rememberOwn({ id: list.id, edit: tokenStr, title: list.title });
     document.title = t('{0} beheren · Wensenlijst', list.title);
     const base = `/api/edit/${encodeURIComponent(tokenStr)}`;
     const isNew = new URLSearchParams(location.search).has('nieuw');
@@ -540,7 +567,9 @@
     const ul = h('ul', { class: 'items' }, items.map((it, i) => manageItem(it, i, items.length, base, reload)));
     const empty = !items.length ? h('p', { class: 'muted center' }, 'Nog geen wensen. Voeg hieronder je eerste wens toe.') : null;
 
-    render(header, shareBox,
+    render(header,
+      viaAdmin ? h('p', { class: 'card notice small' }, 'Je bekijkt dit als beheerder; het wordt niet op dit apparaat bewaard.') : null,
+      shareBox,
       h('section', { class: 'stack' }, h('h2', {}, t('Wensen ({0})', items.length)), empty, ul),
       itemForm(null, base, reload),
       groupsBox(groups, base, tokenStr, reload),
@@ -733,11 +762,10 @@
           h('div', { class: 'muted small' }, [l.owner && t('van {0}', l.owner), l.items === 1 ? t('1 wens') : t('{0} wensen', l.items)].filter(Boolean).join(' · '),
             own ? h('span', { class: 'badge' }, 'jouw lijst') : null),
         ),
-        h('div', { class: 'actions' },
-          own ? h('button', { class: 'link danger', onclick: async () => {
-            if (!confirm(t('"{0}" uit deze groep halen?', l.title))) return;
-            try { await groupApi('POST', id, 'leave', { edit: own.edit }); toast('Uit de groep gehaald'); reload(); } catch (e) { toast(e.message, true); }
-          } }, 'uit groep halen') : h('a', { class: 'btn', href: `/l/${l.id}?groep=${encodeURIComponent(id)}` }, 'Bekijk')),
+        rowTools(`/l/${l.id}?groep=${encodeURIComponent(id)}`, l.title, own ? async () => {
+          if (!confirm(t('"{0}" uit deze groep halen?', l.title))) return;
+          try { await groupApi('POST', id, 'leave', { edit: own.edit }); toast('Uit de groep gehaald'); reload(); } catch (e) { toast(e.message, true); }
+        } : null, 'Uit de groep halen'),
       );
     })) : h('p', { class: 'muted center' }, 'Nog geen lijsten in deze groep. Voeg hieronder de eerste toe!');
 
@@ -762,12 +790,16 @@
 
     const addCard = h('section', { class: 'card stack' },
       h('h2', {}, 'Mijn lijst toevoegen'),
+      notIn.length ? h('p', { class: 'small muted' }, 'Kies een van je lijsten:') : null,
       notIn.length ? h('ul', { class: 'plain stack' }, notIn.map((l) => h('li', { class: 'row spread' }, h('span', {}, l.title || 'Naamloze lijst'),
         h('button', { class: 'primary', onclick: async (e) => { e.target.disabled = true; try { await join(l.edit); } catch (err) { toast(err.message, true); e.target.disabled = false; } } }, 'Toevoegen')))) : null,
       h('details', { class: 'settings', open: !notIn.length && !lists.some((l) => mine.has(l.id)) },
         h('summary', {}, 'Nieuwe lijst maken'), newForm),
-      h('details', { class: 'settings' }, h('summary', {}, 'Lijst staat op een ander apparaat?'),
-        h('div', { class: 'stack' }, h('p', { class: 'small muted' }, 'Plak de beheerlink van je lijst. Die blijft geheim: anderen in de groep zien alleen je deellink.'), pasteForm)),
+      h('details', { class: 'settings' }, h('summary', {}, 'Bestaande lijst toevoegen'),
+        h('div', { class: 'stack' },
+          h('p', { class: 'small muted' }, 'Staat je lijst hier niet? Plak de beheerlink van je lijst: de geheime link waarmee je hem bewerkt. Anderen in de groep zien alleen je deellink.'),
+          pasteForm,
+          me.user ? null : h('p', { class: 'small' }, h('a', { href: '/account' }, 'Tip: log in'), ', dan staan al je lijsten hier vanzelf.'))),
     );
 
     render(groupHead(group),
@@ -786,8 +818,8 @@
     try { data = await api('GET', `/api/group-edit/${encodeURIComponent(tokenStr)}`); }
     catch (e) { return renderError(e.message); }
     const { group, lists, key } = data;
-    rememberGroup({ id: group.id, edit: tokenStr, title: group.title });
-    setGroupKey(group.id, key);
+    const viaAdmin = new URLSearchParams(location.search).get('via') === 'admin'; // opened from /admin: don't keep it on this device
+    if (!viaAdmin) { rememberGroup({ id: group.id, edit: tokenStr, title: group.title }); setGroupKey(group.id, key); }
     document.title = t('{0} beheren · Wensenlijst', group.title);
     const base = `/api/group-edit/${encodeURIComponent(tokenStr)}`;
     const isNew = new URLSearchParams(location.search).has('nieuw');
@@ -798,10 +830,10 @@
       h('div', { class: 'body' },
         h('a', { class: 'title', href: `/l/${l.id}?groep=${encodeURIComponent(group.id)}` }, l.title),
         h('div', { class: 'muted small' }, [l.owner && t('van {0}', l.owner), l.items === 1 ? t('1 wens') : t('{0} wensen', l.items)].filter(Boolean).join(' · '))),
-      h('div', { class: 'actions' }, h('button', { class: 'link danger', onclick: async () => {
+      rowTools(`/l/${l.id}?groep=${encodeURIComponent(group.id)}`, l.title, async () => {
         if (!confirm(t('"{0}" uit de groep verwijderen? De lijst zelf blijft bestaan.', l.title))) return;
         try { await api('DELETE', `${base}/lists/${encodeURIComponent(l.id)}`); toast('Verwijderd uit de groep'); reload(); } catch (e) { toast(e.message, true); }
-      } }, 'verwijderen')),
+      }, 'Uit de groep halen'),
     ))) : h('p', { class: 'muted' }, 'Nog geen lijsten. Deel de groeplink zodat anderen hun lijst kunnen toevoegen.');
 
     const form = h('form', { class: 'stack', onsubmit: async (e) => {
@@ -835,6 +867,7 @@
     );
 
     render(groupHead(group),
+      viaAdmin ? h('p', { class: 'card notice small' }, 'Je bekijkt dit als beheerder; het wordt niet op dit apparaat bewaard.') : null,
       shareCard({ heading: isNew ? '🎉 Je groep is klaar! Deel deze link' : 'Groeplink', url: groupUrl(group.id), title: group.title, highlight: isNew,
         text: t('Groep "{0}": bekijk de verlanglijsten en voeg je eigen lijst toe', group.title),
         secret: { summary: '🔑 Beheerlink van de groep (geheim houden!)', url: groupEditUrl(tokenStr),
